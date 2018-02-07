@@ -3,7 +3,7 @@ use site::{Point, Site};
 type OR = f32;
 type IR = f64;
 
-pub trait Metric {
+pub trait Metric where Self::Output: PartialOrd {
     type Output;
     fn distance<S, X>(a: &S, b: &X) -> Self::Output
     where
@@ -11,21 +11,20 @@ pub trait Metric {
         X: Point;
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Euclidean;
 
 impl Euclidean {
     fn magnitude<A, B>(a: &A, b: &B) -> IR
     where
         A: Point,
-        B: Point,
+        B: Point
     {
         let (a_x, a_y) = a.coordinates();
         let (b_x, b_y) = b.coordinates();
 
-        let mag_x = (a_x as IR - b_x as IR)
-            * (a_x as IR - b_x as IR);
-        let mag_y = (a_y as IR - b_y as IR)
-            * (a_y as IR - b_y as IR);
+        let mag_x = (a_x as IR - b_x as IR) * (a_x as IR - b_x as IR);
+        let mag_y = (a_y as IR - b_y as IR) * (a_y as IR - b_y as IR);
 
         mag_x + mag_y
     }
@@ -37,12 +36,13 @@ impl Metric for Euclidean {
     fn distance<S, X>(a: &S, b: &X) -> Self::Output
     where
         S: Site,
-        X: Point,
+        X: Point
     {
         Euclidean::magnitude(a, b).sqrt() as Self::Output
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct MultWeightedEuclidean;
 
 impl Metric for MultWeightedEuclidean {
@@ -51,12 +51,13 @@ impl Metric for MultWeightedEuclidean {
     fn distance<S, X>(a: &S, b: &X) -> Self::Output
     where
         S: Site,
-        X: Point,
+        X: Point
     {
         (1 as OR / a.weight()) * Euclidean::distance(a, b)
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct AdditiveWeightedEuclidean;
 
 impl Metric for AdditiveWeightedEuclidean {
@@ -65,12 +66,13 @@ impl Metric for AdditiveWeightedEuclidean {
     fn distance<S, X>(a: &S, b: &X) -> Self::Output
     where
         S: Site,
-        X: Point,
+        X: Point
     {
         Euclidean::distance(a, b) - a.weight()
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct PowerEuclidean;
 
 impl Metric for PowerEuclidean {
@@ -79,12 +81,13 @@ impl Metric for PowerEuclidean {
     fn distance<S, X>(a: &S, b: &X) -> Self::Output
     where
         S: Site,
-        X: Point,
+        X: Point
     {
         Euclidean::magnitude(a, b) as Self::Output
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Manhattan;
 
 impl Metric for Manhattan {
@@ -93,7 +96,7 @@ impl Metric for Manhattan {
     fn distance<S, X>(a: &S, b: &X) -> Self::Output
     where
         S: Site,
-        X: Point,
+        X: Point
     {
         let (a_x, a_y) = a.coordinates();
         let (b_x, b_y) = b.coordinates();
