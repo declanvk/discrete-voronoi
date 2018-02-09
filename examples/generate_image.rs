@@ -7,8 +7,8 @@ use std::env;
 use rand::distributions::{IndependentSample, Range};
 use rand::thread_rng;
 
-use discrete_voronoi::{VoronoiBuilder, VoronoiTesselation, BoundingBox, Point, Site};
-use discrete_voronoi::metric::{Euclidean, Manhattan, Metric, PowerEuclidean};
+use discrete_voronoi::{BoundingBox, Point, Site, VoronoiBuilder, VoronoiTesselation};
+use discrete_voronoi::metric::{Manhattan, Metric};
 
 use image::GrayImage;
 
@@ -16,7 +16,8 @@ use image::GrayImage;
 struct ImageSite {
     x: isize,
     y: isize,
-    id: usize
+    id: usize,
+    weight: f32
 }
 
 impl Point for ImageSite {
@@ -27,7 +28,7 @@ impl Point for ImageSite {
 
 impl Site for ImageSite {
     fn weight(&self) -> f32 {
-        1f32
+        self.weight
     }
 }
 
@@ -38,7 +39,7 @@ fn main() {
     let bounding_box = BoundingBox::new(0, 0, width, height);
     let mut tess = VoronoiBuilder::new(sites)
         .bounds(bounding_box)
-        .metric::<Euclidean>()
+        .metric::<Manhattan>()
         .build();
 
     if let Some(num_steps) = num_steps {
@@ -82,7 +83,12 @@ fn generate_sites(width: usize, height: usize, num_sites: usize) -> Vec<ImageSit
     for id in 0..num_sites {
         let x = x_range.ind_sample(&mut rng);
         let y = y_range.ind_sample(&mut rng);
-        sites.push(ImageSite { x, y, id });
+        sites.push(ImageSite {
+            x,
+            y,
+            id,
+            weight: 1f32
+        });
     }
 
     sites
@@ -103,7 +109,7 @@ where
             let width = width as f32;
             let r = (width.powi(2) + height.powi(2)).sqrt() / 7f32;
 
-            let value = (x - width / 2f32).powi(2) / r  + (y - height / 2f32).powi(2) / r;
+            let value = (x - width / 2f32).powi(2) / r + (y - height / 2f32).powi(2) / r;
 
             (value as usize % 255) as u8
         }

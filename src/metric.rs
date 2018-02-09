@@ -26,8 +26,8 @@ impl Euclidean {
         let (a_x, a_y) = a.coordinates();
         let (b_x, b_y) = b.coordinates();
 
-        let mag_x = (a_x as IR - b_x as IR) * (a_x as IR - b_x as IR);
-        let mag_y = (a_y as IR - b_y as IR) * (a_y as IR - b_y as IR);
+        let mag_x = (a_x as IR - b_x as IR).powi(2);
+        let mag_y = (a_y as IR - b_y as IR).powi(2);
 
         mag_x + mag_y
     }
@@ -86,7 +86,7 @@ impl Metric for PowerEuclidean {
         S: Site,
         X: Point
     {
-        Euclidean::magnitude(a, b).abs() as Self::Output
+        (Euclidean::magnitude(a, b) - a.weight().powi(2) as IR) as Self::Output
     }
 }
 
