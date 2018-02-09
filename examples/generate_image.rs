@@ -7,10 +7,8 @@ use std::env;
 use rand::distributions::{IndependentSample, Range};
 use rand::thread_rng;
 
-use discrete_voronoi::discrete_voronoi::{VoronoiBuilder, VoronoiTesselation};
-use discrete_voronoi::grid::BoundingBox;
+use discrete_voronoi::{VoronoiBuilder, VoronoiTesselation, BoundingBox, Point, Site};
 use discrete_voronoi::metric::{Euclidean, Manhattan, Metric, PowerEuclidean};
-use discrete_voronoi::site::{Point, Site};
 
 use image::GrayImage;
 
@@ -105,7 +103,7 @@ where
             let width = width as f32;
             let r = (width.powi(2) + height.powi(2)).sqrt() / 7f32;
 
-            let value = ((x - width / 2f32).powi(2) / r  + (y - height / 2f32).powi(2) / r);
+            let value = (x - width / 2f32).powi(2) / r  + (y - height / 2f32).powi(2) / r;
 
             (value as usize % 255) as u8
         }

@@ -1,6 +1,10 @@
 #![feature(nll)]
 
-pub mod site;
+mod site;
 pub mod metric;
-pub mod grid;
-pub mod discrete_voronoi;
+mod grid;
+mod discrete_voronoi;
+
+pub use site::*;
+pub use grid::BoundingBox;
+pub use discrete_voronoi::{VoronoiBuilder, VoronoiTesselation};
