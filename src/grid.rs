@@ -1,5 +1,6 @@
 use discrete_voronoi::SiteOwner;
 use site::{Point, Site};
+
 use std::ops::{Index, IndexMut};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11,11 +12,21 @@ pub struct BoundingBox {
 }
 
 impl BoundingBox {
-    pub fn fit_to_sites<S: Site>(sites: &Vec<S>) -> BoundingBox {
-        let mut min_x = 0;
-        let mut max_x = 0;
-        let mut min_y = 0;
-        let mut max_y = 0;
+    pub fn new(x_offset: isize, y_offset: isize, width: usize, height: usize) -> Self {
+        BoundingBox {
+            x_offset,
+            y_offset,
+            height,
+            width
+        }
+    }
+
+    pub fn fit_to_sites<S: Site>(sites: &Vec<S>) -> Self {
+        assert!(!sites.is_empty(), "Sites must not be empty");
+        let mut min_x = isize::max_value();
+        let mut max_x = isize::min_value();
+        let mut min_y = isize::max_value();
+        let mut max_y = isize::min_value();
 
         for site in sites {
             let (x, y) = site.coordinates();
@@ -37,8 +48,8 @@ impl BoundingBox {
             }
         }
 
-        let width = (max_x - min_x) as usize;
-        let height = (max_y - min_y) as usize;
+        let width = (max_x - min_x + 1) as usize;
+        let height = (max_y - min_y + 1) as usize;
 
         let x_offset = min_x;
         let y_offset = min_y;
@@ -49,6 +60,16 @@ impl BoundingBox {
             x_offset,
             y_offset
         }
+    }
+
+    pub fn translate_idx(&self, idx: GridIdx) -> (usize, usize) {
+        let x = (idx.0 - self.x_offset) as usize;
+        let y = (idx.1 - self.y_offset) as usize;
+        (x, y)
+    }
+
+    pub fn dimensions(&self) -> (usize, usize) {
+        (self.width, self.height)
     }
 }
 
@@ -64,7 +85,7 @@ impl GridIdx {
         let adjusted_x = self.0 - bounds.x_offset;
         let adjusted_y = self.1 - bounds.y_offset;
 
-        0 <= adjusted_x && adjusted_x < bounds.width as isize && 0 <= adjusted_y && adjusted_y <= bounds.height as isize
+        0 <= adjusted_x && adjusted_x < bounds.width as isize && 0 <= adjusted_y && adjusted_y < bounds.height as isize
     }
 }
 
@@ -91,80 +112,80 @@ impl<'a> Iterator for GridIdxNeighborIter<'a> {
         if self.1 >= MAX_DIRECTION {
             None
         } else {
-            let next_output = loop {
+            loop {
                 let possible = match self.1 {
                     0 => GridIdx((self.0).0, (self.0).1 + 1), // north
                     1 => GridIdx((self.0).0 + 1, (self.0).1), // east
                     2 => GridIdx((self.0).0, (self.0).1 - 1), // south
                     3 => GridIdx((self.0).0 - 1, (self.0).1), // west
+                    x if x >= MAX_DIRECTION => break None,
                     _ => unreachable!()
                 };
 
+                self.1 += 1;
                 if possible.inside(self.2) {
-                    break possible;
-                } else {
-                    self.1 += 1;
+                    break Some(possible);
                 }
-            };
-
-            Some(next_output)
+            }
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Grid {
-    bounding: BoundingBox,
+    bounds: BoundingBox,
     data: Box<[Cell]>
 }
 
 impl Grid {
-    pub fn new(bounding: BoundingBox) -> Self {
+    pub fn new(bounds: BoundingBox) -> Self {
         Grid {
-            bounding,
-            data: vec![Cell::new(); bounding.width * bounding.height].into_boxed_slice()
+            bounds,
+            data: vec![Cell::new(); bounds.width * bounds.height].into_boxed_slice()
         }
     }
 
     pub fn clear(&mut self) {
-        self.data = vec![Cell::new(); self.bounding.width * self.bounding.height].into_boxed_slice();
+        self.data = vec![Cell::new(); self.bounds.width * self.bounds.height].into_boxed_slice();
     }
 
-    pub fn bounding(&self) -> &BoundingBox {
-        &self.bounding
+    pub fn bounds(&self) -> &BoundingBox {
+        &self.bounds
     }
 
-    pub fn claim_cells(&mut self, indices: &Vec<GridIdx>, claimee: SiteOwner) -> (Vec<GridIdx>, Vec<(GridIdx, SiteOwner)>) {
-        let mut contested = Vec::new();
-        let mut claimed = Vec::new();
+    pub fn claim_cells(
+        &mut self,
+        indices: &Vec<GridIdx>,
+        claimant: SiteOwner
+    ) -> (Vec<GridIdx>, Vec<(GridIdx, SiteOwner)>) {
+        let mut contested_cells = Vec::new();
+        let mut claimed_cells = Vec::new();
 
         for idx in indices {
-            match self[*idx] {
-                ref mut cell @ Cell {
-                    contested: false,
-                    owner: None
-                } => {
-                    cell.owner = Some(claimee);
+            let ref mut cell = self[*idx];
+            let same_owner = cell.owner.map_or(false, |cell| cell == claimant);
+            let contested = cell.contested;
+            let empty = cell.owner.is_none();
 
-                    claimed.push(*idx);
-                }
-                ref mut cell @ Cell {
-                    contested: false,
-                    owner: Some(_)
-                } => {
-                    let old_owner = cell.owner;
+            if !same_owner {
+                if !contested && empty {
+                    cell.owner = Some(claimant);
+
+                    claimed_cells.push(*idx);
+                } else if !empty {
+                    let old_owner = cell.owner.take().unwrap();
                     cell.contested = true;
-                    cell.owner = None;
 
-                    contested.push((*idx, old_owner.unwrap()));
+                    contested_cells.push((*idx, old_owner));
                 }
-                Cell {
-                    contested: true, ..
-                } => {}
             }
         }
 
-        (claimed, contested)
+        (claimed_cells, contested_cells)
+    }
+
+    pub fn into_raw(self) -> Box<[Cell]> {
+        self.data
     }
 }
 
@@ -172,23 +193,19 @@ impl Index<GridIdx> for Grid {
     type Output = Cell;
 
     fn index(&self, idx: GridIdx) -> &Self::Output {
-        let x = (idx.0 + self.bounding.x_offset) as usize;
-        let y = (idx.1 + self.bounding.y_offset) as usize;
-
-        &self.data[x + y * self.bounding.width]
+        let (x, y) = self.bounds.translate_idx(idx);
+        &self.data[x + y * self.bounds.width]
     }
 }
 
 impl IndexMut<GridIdx> for Grid {
     fn index_mut(&mut self, idx: GridIdx) -> &mut Self::Output {
-        let x = (idx.0 + self.bounding.x_offset) as usize;
-        let y = (idx.1 + self.bounding.y_offset) as usize;
-
-        &mut self.data[x + y * self.bounding.width]
+        let (x, y) = self.bounds.translate_idx(idx);
+        &mut self.data[x + y * self.bounds.width]
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Cell {
     contested: bool,
     owner: Option<SiteOwner>
@@ -204,5 +221,13 @@ impl Cell {
 
     pub fn set_owner(&mut self, new_owner: SiteOwner) {
         self.owner = Some(new_owner);
+    }
+
+    pub fn owner(&self) -> &Option<SiteOwner> {
+        &self.owner
+    }
+
+    pub fn contested(&self) -> bool {
+        self.contested
     }
 }

@@ -3,7 +3,10 @@ use site::{Point, Site};
 type OR = f32;
 type IR = f64;
 
-pub trait Metric where Self::Output: PartialOrd {
+pub trait Metric
+where
+    Self::Output: PartialOrd
+{
     type Output;
     fn distance<S, X>(a: &S, b: &X) -> Self::Output
     where
@@ -83,7 +86,7 @@ impl Metric for PowerEuclidean {
         S: Site,
         X: Point
     {
-        Euclidean::magnitude(a, b) as Self::Output
+        Euclidean::magnitude(a, b).abs() as Self::Output
     }
 }
 
