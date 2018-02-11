@@ -29,3 +29,15 @@ impl Site for [isize; 3] {
         self[2] as f32
     }
 }
+
+impl Point for [usize; 3] {
+    fn coordinates(&self) -> (isize, isize) {
+        (self[0] as isize, self[1] as isize)
+    }
+}
+
+impl Site for [usize; 3] {
+    fn weight(&self) -> f32 {
+        self[2] as f32
+    }
+}
