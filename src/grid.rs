@@ -71,9 +71,38 @@ impl BoundingBox {
     pub fn dimensions(&self) -> (usize, usize) {
         (self.width, self.height)
     }
+
+    pub fn coordinates_iter(&self) -> BoundedCoordinatesIter {
+        BoundedCoordinatesIter(self, Some(GridIdx(self.x_offset, self.y_offset)))
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
+pub struct BoundedCoordinatesIter<'a>(&'a BoundingBox, Option<GridIdx>);
+
+impl<'a> Iterator for BoundedCoordinatesIter<'a> {
+    type Item = GridIdx;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let last = self.1;
+
+        if let Some(last_idx) = self.1 {
+            if (last_idx.0 - self.0.x_offset + 1) as usize >= self.0.width {
+                if (last_idx.1 - self.0.y_offset + 1) as usize >= self.0.height {
+                    self.1 = None; // Bottom right corner
+                } else {
+                    self.1 = Some(GridIdx(self.0.x_offset, last_idx.1 + 1)); // next row
+                }
+            } else {
+                self.1 = Some(GridIdx(last_idx.0 + 1, last_idx.1)); // next column
+            }
+        }
+
+        last
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GridIdx(isize, isize);
 
 impl GridIdx {
@@ -139,14 +168,25 @@ pub struct Grid {
 
 impl Grid {
     pub fn new(bounds: BoundingBox) -> Self {
+        let mut data = Vec::with_capacity(bounds.width * bounds.height);
+        for coord in bounds.coordinates_iter() {
+            let (x, y) = bounds.translate_idx(coord);
+            data[x + y * bounds.width] = Cell::new(coord);
+        }
+
         Grid {
             bounds,
-            data: vec![Cell::new(); bounds.width * bounds.height].into_boxed_slice()
+            data: data.into_boxed_slice()
         }
     }
 
     pub fn clear(&mut self) {
-        self.data = vec![Cell::new(); self.bounds.width * self.bounds.height].into_boxed_slice();
+        for coord in self.bounds.coordinates_iter() {
+            let (x, y) = self.bounds.translate_idx(coord);
+            let ref mut cell = self.data[x + y * self.bounds.width];
+            cell.contested = false;
+            cell.owner = None;
+        }
     }
 
     pub fn bounds(&self) -> &BoundingBox {
@@ -207,13 +247,15 @@ impl IndexMut<GridIdx> for Grid {
 
 #[derive(Debug, Clone)]
 pub struct Cell {
+    coordinates: GridIdx,
     contested: bool,
     owner: Option<SiteOwner>
 }
 
 impl Cell {
-    fn new() -> Self {
+    fn new(coordinates: GridIdx) -> Self {
         Cell {
+            coordinates,
             contested: false,
             owner: None
         }
