@@ -169,6 +169,7 @@ pub struct Grid {
 impl Grid {
     pub fn new(bounds: BoundingBox) -> Self {
         let mut data = Vec::with_capacity(bounds.width * bounds.height);
+        unsafe { data.set_len(bounds.width * bounds.height) }
         for coord in bounds.coordinates_iter() {
             let (x, y) = bounds.translate_idx(coord);
             data[x + y * bounds.width] = Cell::new(coord);

@@ -3,6 +3,8 @@ use metric::{Euclidean, Metric};
 use site::Site;
 
 use std::marker::PhantomData;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug)]
 pub struct VoronoiBuilder<S, M>
@@ -82,7 +84,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SiteOwner(pub u32);
 
 #[derive(Debug)]
@@ -113,6 +115,20 @@ where
         for idx in &self.newly_claimed {
             self.boundary_chain.extend(idx.neighbors(bounds));
         }
+    }
+}
+
+impl<S> PartialEq for SiteWrapper<S> where S: Site {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl<S> Eq for SiteWrapper<S> where S: Site {}
+
+impl<S> Hash for SiteWrapper<S> where S: Site {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
 }
 
