@@ -69,11 +69,12 @@ where
             })
             .zip(0..(num_sites as u32));
         let wrapped_sites = sites_id_pars
-            .map(|(site, id)| SiteWrapper::new(id, site))
-            .collect::<Vec<_>>();
+            .map(|(site, id)| (SiteOwner(id), SiteWrapper::new(id, site)));
 
+        let mut sites_map = HashMap::with_capacity(num_sites);
+        sites_map.extend(wrapped_sites);
         let mut tesselation = VoronoiTesselation {
-            sites: wrapped_sites,
+            sites: sites_map,
             metric: PhantomData,
             grid: Grid::new(bounds)
         };
@@ -137,7 +138,7 @@ where
     S: Site,
     M: Metric
 {
-    sites: Vec<SiteWrapper<S>>,
+    sites: HashMap<SiteOwner, SiteWrapper<S>>,
     metric: PhantomData<M>,
     grid: Grid
 }
@@ -148,7 +149,7 @@ where
     M: Metric
 {
     pub fn sites(&self) -> Vec<&S> {
-        self.sites.iter().map(|s| &s.site).collect()
+        self.sites.iter().map(|(_, wrapper)| &wrapper.site).collect()
     }
 
     pub fn bounds(&self) -> &BoundingBox {
@@ -156,7 +157,7 @@ where
     }
 
     pub fn init_sites(&mut self) {
-        for site_wrapper in self.sites.iter_mut() {
+        for (_, site_wrapper) in self.sites.iter_mut() {
             let mut to_claim = vec![GridIdx::from(site_wrapper.site.coordinates())];
             let (claimed, contested) = self.grid.claim_cells(&to_claim, site_wrapper.id);
 
@@ -167,6 +168,10 @@ where
         }
     }
 
+    pub fn reset_grid(&mut self) {
+        self.grid.clear()
+    }
+
     pub fn compute(&mut self) {
         while self.sum_newly_claimed() > 0 {
             self.step();
@@ -174,8 +179,9 @@ where
     }
 
     pub fn step(&mut self) {
-        for site_wrapper_idx in 0..self.sites.len() {
-            let ref mut site_wrapper = self.sites[site_wrapper_idx];
+        let keys: Vec<SiteOwner> = self.sites.keys().cloned().collect();
+        for site_wrapper_idx in keys {
+            let site_wrapper = self.sites.get_mut(&site_wrapper_idx).unwrap();
 
             site_wrapper.boundary_chain.clear();
             site_wrapper.update_boundary_chain(self.grid.bounds());
@@ -187,33 +193,31 @@ where
             site_wrapper.newly_claimed.append(&mut claimed);
 
             let mut claimed_won = VoronoiTesselation::<S, M>::handle_conflicts(
-                &mut self.sites,
-                site_wrapper_idx,
+                &self.sites,
+                &site_wrapper_idx,
                 contested,
                 &mut self.grid
             );
 
-            self.sites[site_wrapper_idx]
-                .newly_claimed
-                .append(&mut claimed_won);
+            self.sites.get_mut(&site_wrapper_idx).unwrap().newly_claimed.append(&mut claimed_won);
         }
     }
 
     fn handle_conflicts(
-        sites: &mut Vec<SiteWrapper<S>>,
-        owner_idx: usize,
+        sites: &HashMap<SiteOwner, SiteWrapper<S>>,
+        owner_idx: &SiteOwner,
         contested: Vec<(GridIdx, SiteOwner)>,
         grid: &mut Grid
     ) -> Vec<GridIdx> {
         let mut claimed = Vec::new();
         for (idx, old_owner) in contested.into_iter() {
             let our_distance = M::distance(&sites[owner_idx].site, &idx);
-            let their_distance = M::distance(&sites[old_owner.0 as usize].site, &idx);
+            let their_distance = M::distance(&sites[&old_owner].site, &idx);
 
             if their_distance > our_distance {
                 claimed.push(idx);
                 grid[idx].set_owner(sites[owner_idx].id);
-            // } else if their_distance == our_distance {
+            } else if their_distance == our_distance {
 
             } else {
                 grid[idx].set_owner(old_owner)
@@ -226,7 +230,7 @@ where
     fn sum_newly_claimed(&self) -> usize {
         self.sites
             .iter()
-            .map(|site_wrapper| site_wrapper.newly_claimed.len())
+            .map(|(_, site_wrapper)| site_wrapper.newly_claimed.len())
             .sum()
     }
 
@@ -239,10 +243,28 @@ where
             .into_raw()
             .into_iter()
             .map(|cell| match cell.owner() {
-                &Some(owner) => map(cell, Some(&sites[owner.0 as usize].site)),
+                &Some(owner) => map(cell, Some(&sites[&owner].site)),
                 &None => map(cell, None)
             })
             .collect()
+    }
+
+    pub fn into_regions(self) -> HashMap<S, Vec<Cell>> where S: Eq + Hash + Clone {
+        let mut regions = HashMap::new();
+
+        let cells: Vec<Cell> = From::from(self.grid.into_raw());
+        for cell in cells.into_iter() {
+            if cell.owner().is_some() {
+                let owner = cell.owner().as_ref().unwrap();
+                let ref site_wrapper = self.sites[owner];
+                if !regions.contains_key(&site_wrapper.site) {
+                    regions.insert(site_wrapper.site.clone(), Vec::new());
+                }
+                regions.get_mut(&site_wrapper.site).unwrap().push(cell);
+            }
+        }
+
+        regions
     }
 }
 
