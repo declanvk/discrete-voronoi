@@ -87,9 +87,8 @@ impl<'a> Iterator for BoundedCoordinatesIter<'a> {
         let last = self.1;
 
         if let Some(last_idx) = self.1 {
-            let (adjusted_x, adjusted_y) = self.0.translate_idx(last_idx);
-            if adjusted_x + 1 >= self.0.width {
-                if adjusted_y + 1 >= self.0.height {
+            if (last_idx.0 - self.0.x_offset + 1) as usize >= self.0.width {
+                if (last_idx.1 - self.0.y_offset + 1) as usize >= self.0.height {
                     self.1 = None; // Bottom right corner
                 } else {
                     self.1 = Some(GridIdx(self.0.x_offset, last_idx.1 + 1)); // next row
@@ -101,22 +100,7 @@ impl<'a> Iterator for BoundedCoordinatesIter<'a> {
 
         last
     }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let total_cells = self.0.height * self.0.width;
-
-        if let Some(last_idx) = self.1 {
-            let (x, y) = self.0.translate_idx(last_idx);
-            let index = x + y * self.0.width;
-
-            (total_cells - index, Some(total_cells - index))
-        } else {
-            (total_cells, Some(total_cells))
-        }
-    }
 }
-
-impl<'a> ExactSizeIterator for BoundedCoordinatesIter<'a> {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GridIdx(isize, isize);
@@ -173,10 +157,6 @@ impl<'a> Iterator for GridIdxNeighborIter<'a> {
                 }
             }
         }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (0, Some((MAX_DIRECTION - self.1) as usize))
     }
 }
 
