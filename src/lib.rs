@@ -1,5 +1,7 @@
 #![feature(nll)]
 
+extern crate rayon;
+
 mod site;
 pub mod metric;
 mod grid;
