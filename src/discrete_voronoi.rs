@@ -2,9 +2,9 @@ use grid::{BoundingBox, Cell, Grid, GridIdx};
 use metric::{Euclidean, Metric};
 use site::Site;
 
+use std::marker::PhantomData;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::marker::PhantomData;
 
 #[derive(Debug)]
 pub struct VoronoiBuilder<S, M>
@@ -68,7 +68,8 @@ where
                 idx.inside(&bounds)
             })
             .zip(0..(num_sites as u32));
-        let wrapped_sites = sites_id_pars.map(|(site, id)| (SiteOwner(id), SiteWrapper::new(id, site)));
+        let wrapped_sites = sites_id_pars
+            .map(|(site, id)| (SiteOwner(id), SiteWrapper::new(id, site)));
 
         let mut sites_map = HashMap::with_capacity(num_sites);
         sites_map.extend(wrapped_sites);
@@ -112,33 +113,21 @@ where
     }
 
     fn update_boundary_chain(&mut self, bounds: &BoundingBox) {
-        self.boundary_chain.extend(
-            self.newly_claimed
-                .iter()
-                .flat_map(|idx| idx.neighbors(bounds))
-        )
+        for idx in &self.newly_claimed {
+            self.boundary_chain.extend(idx.neighbors(bounds));
+        }
     }
 }
 
-impl<S> PartialEq for SiteWrapper<S>
-where
-    S: Site
-{
+impl<S> PartialEq for SiteWrapper<S> where S: Site {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl<S> Eq for SiteWrapper<S>
-where
-    S: Site
-{
-}
+impl<S> Eq for SiteWrapper<S> where S: Site {}
 
-impl<S> Hash for SiteWrapper<S>
-where
-    S: Site
-{
+impl<S> Hash for SiteWrapper<S> where S: Site {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);
     }
@@ -160,10 +149,7 @@ where
     M: Metric
 {
     pub fn sites(&self) -> Vec<&S> {
-        self.sites
-            .iter()
-            .map(|(_, wrapper)| &wrapper.site)
-            .collect()
+        self.sites.iter().map(|(_, wrapper)| &wrapper.site).collect()
     }
 
     pub fn bounds(&self) -> &BoundingBox {
@@ -206,14 +192,14 @@ where
 
             site_wrapper.newly_claimed.append(&mut claimed);
 
-            let mut claimed_won =
-                VoronoiTesselation::<S, M>::handle_conflicts(&self.sites, &site_wrapper_idx, contested, &mut self.grid);
+            let mut claimed_won = VoronoiTesselation::<S, M>::handle_conflicts(
+                &self.sites,
+                &site_wrapper_idx,
+                contested,
+                &mut self.grid
+            );
 
-            self.sites
-                .get_mut(&site_wrapper_idx)
-                .unwrap()
-                .newly_claimed
-                .append(&mut claimed_won);
+            self.sites.get_mut(&site_wrapper_idx).unwrap().newly_claimed.append(&mut claimed_won);
         }
     }
 
@@ -263,10 +249,7 @@ where
             .collect()
     }
 
-    pub fn into_regions(self) -> HashMap<S, Vec<Cell>>
-    where
-        S: Eq + Hash + Clone
-    {
+    pub fn into_regions(self) -> HashMap<S, Vec<Cell>> where S: Eq + Hash + Clone {
         let mut regions = HashMap::new();
 
         let cells: Vec<Cell> = From::from(self.grid.into_raw());
