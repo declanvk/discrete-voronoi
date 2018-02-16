@@ -211,12 +211,15 @@ where
     ) -> Vec<GridIdx> {
         let mut claimed = Vec::new();
         for (idx, old_owner) in contested.into_iter() {
-            let our_distance = M::distance(&sites[owner_idx].site, &idx);
-            let their_distance = M::distance(&sites[&old_owner].site, &idx);
+            let ref new_site_wrapper = sites[owner_idx];
+            let ref old_site_wrapper = sites[&old_owner];
+
+            let our_distance = M::distance(&new_site_wrapper.site, &idx);
+            let their_distance = M::distance(&old_site_wrapper.site, &idx);
 
             if their_distance > our_distance {
                 claimed.push(idx);
-                grid[idx].set_owner(sites[owner_idx].id);
+                grid[idx].set_owner(new_site_wrapper.id);
             } else if their_distance == our_distance {
 
             } else {
